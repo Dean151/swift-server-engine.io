@@ -1,0 +1,12 @@
+.build/
+.github/
+.swiftpm/
+.vscode/
+.git/
+.DS_Store
+Protocol.md
+.gitignore
+compose.yaml
+Dockerfile
+Makefile
+LICENSE

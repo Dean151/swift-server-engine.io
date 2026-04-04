@@ -1,0 +1,16 @@
+services:
+  engine-runner:
+    image: swift-server-engine-io:engine-runner
+    build:
+      context: .
+      target: engine-runner
+    expose:
+      - 3000
+
+  engine-test:
+    image: swift-server-engine-io:engine-test
+    build:
+      context: .
+      target: engine-test
+    depends_on:
+      - engine-runner

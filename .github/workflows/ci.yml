@@ -1,0 +1,55 @@
+name: Linux CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  swift-tests:
+    name: Swift Tests (Swift ${{ matrix.swift }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.3"]
+    container:
+      image: swift:${{ matrix.swift }}-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Run tests
+        run: swift test
+
+  protocol-tests:
+    name: Engine.IO Protocol Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build engine-runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: engine-runner
+          tags: swift-server-engine-io:engine-runner
+          load: true
+          cache-from: type=gha,scope=engine-runner
+          cache-to: type=gha,mode=max,scope=engine-runner
+      - name: Build engine-test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: engine-test
+          tags: swift-server-engine-io:engine-test
+          load: true
+          cache-from: type=gha,scope=engine-test
+          cache-to: type=gha,mode=max,scope=engine-test
+      - name: Run engine.io protocol tests
+        run: docker compose run --rm engine-test
+      - name: Tear down containers
+        if: always()
+        run: docker compose down --remove-orphans
