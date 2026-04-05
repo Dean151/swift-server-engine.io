@@ -21,7 +21,7 @@ The project currently focuses on Engine.IO transport behavior, including:
 Add the package dependency to your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/thomasauger/swift-server-engine.io.git", branch: "main")
+.package(url: "https://github.com/thomasauger/swift-server-engine.io.git", exact: "4.0.0-beta.1")
 ```
 
 Then depend on the `EngineIO` product:

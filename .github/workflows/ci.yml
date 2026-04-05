@@ -2,7 +2,13 @@ name: Linux CI
 
 on:
   push:
+    paths-ignore:
+      - "README.md"
+      - "Sources/**/*.docc/**"
   pull_request:
+    paths-ignore:
+      - "README.md"
+      - "Sources/**/*.docc/**"
 
 jobs:
   swift-tests:
