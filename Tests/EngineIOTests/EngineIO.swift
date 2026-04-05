@@ -286,6 +286,75 @@ private struct OpenPacketPayload: Decodable {
     #expect(upgradedPacket == .message(.text("queued")))
 }
 
+
+@Test func volatileSendDropsPollingPacketWhenNoPollIsPending() async throws {
+    let store = SessionStore(configuration: .init(
+        pingTimeout: .seconds(10),
+        pingInterval: .seconds(10),
+        sessionIDGenerator: { "volatile-drop-session" }
+    ))
+    let handshake = try #require(await store.createPollingSession(request: makeRequest()))
+
+    #expect(await handshake.connection.isWritable == false)
+    #expect(await handshake.connection.sendVolatile(.text("dropped")) == false)
+
+    let pendingPoll = Task {
+        try await store.poll(sid: handshake.connection.sid)
+    }
+    try await waitUntil {
+        await store.hasPendingPollRequest(sid: handshake.connection.sid)
+    }
+
+    await handshake.connection.send(.text("reliable"))
+    let packets = try await pendingPoll.value
+    #expect(packets == [.message(.text("reliable"))])
+}
+
+@Test func volatileSendFlushesPollingPacketWhenPollIsPending() async throws {
+    let store = SessionStore(configuration: .init(
+        pingTimeout: .seconds(10),
+        pingInterval: .seconds(10),
+        sessionIDGenerator: { "volatile-poll-session" }
+    ))
+    let handshake = try #require(await store.createPollingSession(request: makeRequest()))
+    let pendingPoll = Task {
+        try await store.poll(sid: handshake.connection.sid)
+    }
+    try await waitUntil {
+        await store.hasPendingPollRequest(sid: handshake.connection.sid)
+    }
+
+    #expect(await handshake.connection.isWritable)
+    #expect(await handshake.connection.sendVolatile(.text("volatile")))
+
+    let packets = try await pendingPoll.value
+    #expect(packets == [.message(.text("volatile"))])
+}
+
+@Test func volatileSendFlushesImmediatelyOnActiveWebSocket() async throws {
+    let store = SessionStore(configuration: .init(
+        pingTimeout: .seconds(10),
+        pingInterval: .seconds(10),
+        sessionIDGenerator: { "volatile-websocket-session" }
+    ))
+
+    let plan = await store.prepareWebSocketConnection(request: makeRequest(), sid: nil)
+    guard case .newSession(let handshake) = plan else {
+        Issue.record("Expected a fresh websocket session")
+        return
+    }
+
+    let (stream, continuation) = AsyncStream.makeStream(of: EngineIOPacket.self)
+    await store.attachNewWebSocket(sid: handshake.connection.sid, continuation: continuation)
+
+    #expect(await handshake.connection.isWritable)
+    #expect(await handshake.connection.sendVolatile(.text("volatile")))
+
+    var iterator = stream.makeAsyncIterator()
+    let packet = await iterator.next()
+    #expect(packet == .message(.text("volatile")))
+}
+
 @Test func upgradeTimeoutClosesIncompleteUpgrade() async throws {
     let store = SessionStore(configuration: .init(
         pingTimeout: .seconds(10),

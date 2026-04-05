@@ -338,7 +338,11 @@ actor SessionStore {
 
     func send(_ data: EngineIOData, to sid: String) {
         guard sessions[sid] != nil else { return }
-        enqueue(.message(data), for: sid)
+        _ = enqueue(.message(data), for: sid)
+    }
+
+    func sendVolatile(_ data: EngineIOData, to sid: String) -> Bool {
+        enqueue(.message(data), for: sid, allowQueueing: false)
     }
 
     func connection(for sid: String) -> EngineIOConnection? {
@@ -358,6 +362,16 @@ actor SessionStore {
 
     func hasPendingPollRequest(sid: String) -> Bool {
         sessions[sid]?.pendingPoll != nil
+    }
+
+    func isWritable(sid: String) -> Bool {
+        guard let session = sessions[sid] else { return false }
+        switch session.webSocketState {
+        case .active:
+            return true
+        case .none, .reservedForUpgrade, .upgrading:
+            return session.pendingPoll != nil
+        }
     }
 
     func close() async {
@@ -519,24 +533,36 @@ actor SessionStore {
         }
     }
 
-    private func enqueue(_ packet: EngineIOPacket, for sid: String) {
-        guard var session = sessions[sid] else { return }
+    @discardableResult
+    private func enqueue(
+        _ packet: EngineIOPacket,
+        for sid: String,
+        allowQueueing: Bool = true
+    ) -> Bool {
+        guard var session = sessions[sid] else { return false }
         switch session.webSocketState {
         case .active(let continuation):
             sessions[sid] = session
             continuation.yield(packet)
+            return true
         case .upgrading(let continuation, _) where packet.isProbeResponse || packet.isClose:
             sessions[sid] = session
             continuation.yield(packet)
+            return true
         default:
             if let pendingPoll = session.pendingPoll {
                 session.pendingPoll = nil
                 sessions[sid] = session
                 pendingPoll.resume(returning: [packet])
-            } else {
-                session.outboundQueue.append(packet)
-                sessions[sid] = session
+                return true
             }
+            guard allowQueueing else {
+                sessions[sid] = session
+                return false
+            }
+            session.outboundQueue.append(packet)
+            sessions[sid] = session
+            return true
         }
     }
 
@@ -583,6 +609,12 @@ actor SessionStore {
             request: request,
             sendOperation: { [store = self] data in
                 await store.send(data, to: sid)
+            },
+            sendVolatileOperation: { [store = self] data in
+                await store.sendVolatile(data, to: sid)
+            },
+            isWritableOperation: { [store = self] in
+                await store.isWritable(sid: sid)
             },
             closeOperation: { [store = self] in
                 await store.closeSession(sid: sid)

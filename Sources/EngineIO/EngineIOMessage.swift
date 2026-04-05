@@ -41,25 +41,48 @@ public struct EngineIOConnection: Sendable, Equatable {
     public let request: HTTPRequest
 
     private let sendOperation: @Sendable (EngineIOData) async -> Void
+    private let sendVolatileOperation: @Sendable (EngineIOData) async -> Bool
+    private let isWritableOperation: @Sendable () async -> Bool
     private let closeOperation: @Sendable () async -> Void
 
     init(
         sid: String,
         request: HTTPRequest,
         sendOperation: @escaping @Sendable (EngineIOData) async -> Void,
+        sendVolatileOperation: @escaping @Sendable (EngineIOData) async -> Bool,
+        isWritableOperation: @escaping @Sendable () async -> Bool,
         closeOperation: @escaping @Sendable () async -> Void
     ) {
         self.sid = sid
         self.request = request
         self.sendOperation = sendOperation
+        self.sendVolatileOperation = sendVolatileOperation
+        self.isWritableOperation = isWritableOperation
         self.closeOperation = closeOperation
     }
 
-    /// Sends a payload to the connected client.
+    /// Sends a payload to the connected client using the reliable delivery path.
     ///
     /// - Parameter data: The payload to send.
     public func send(_ data: EngineIOData) async {
         await self.sendOperation(data)
+    }
+
+    /// Sends a payload only when the current transport can flush it immediately.
+    ///
+    /// Volatile sends are dropped instead of being buffered when the transport is not currently writable.
+    ///
+    /// - Parameter data: The payload to send.
+    /// - Returns: `true` when the payload was accepted for immediate delivery, or `false` when it was dropped.
+    public func sendVolatile(_ data: EngineIOData) async -> Bool {
+        await self.sendVolatileOperation(data)
+    }
+
+    /// Whether the current transport can flush a regular message immediately without buffering.
+    public var isWritable: Bool {
+        get async {
+            await self.isWritableOperation()
+        }
     }
 
     /// Closes the connection from the server side.
