@@ -1,5 +1,8 @@
 # swift-server-engine.io
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FDean151%2Fswift-server-engine.io%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/Dean151/swift-server-engine.io)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FDean151%2Fswift-server-engine.io%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/Dean151/swift-server-engine.io)
+
 Engine.IO server implementation in Swift, built on top of Hummingbird.
 
 This package provides:
